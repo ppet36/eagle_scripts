@@ -1,0 +1,39 @@
+void hole (int diameter, int x, int y) {
+  printf ("%f,%f,%f\n", u2mm (diameter) * 1000, u2mm (x) * 1000, u2mm (y) * 1000);
+}
+
+void cut (int x1, int y1, int x2, int y2) {
+  printf ("0,%f,%f,%f,%f\n", u2mm (x1) * 1000, u2mm (y1) * 1000, u2mm (x2) * 1000, u2mm (y2) * 1000);
+}
+
+board (B) {
+  output (filesetext (B.name, ".points"), "wt") {
+    B.holes (H) {
+      hole (H.drill, H.x, H.y);
+    }
+
+    B.signals (S) {
+      S.vias (V) {
+        hole (V.drill, V.x, V.y);
+      }
+    }
+    
+    B.elements (E) {
+      E.package.contacts (C) {
+        if (C.pad) {
+          hole (C.pad.drill, C.pad.x, C.pad.y);
+        }
+      }
+      E.package.holes (H) {
+        hole (H.drill, H.x, H.y);
+      }
+    }
+
+    B.wires (W) {
+      if (W.width == 0) {
+        cut (W.x1, W.y1, W.x2, W.y2);
+      }
+    }
+  }
+}
+

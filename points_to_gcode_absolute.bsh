@@ -1,0 +1,281 @@
+/**
+ * Konverze z der vygenerovanych skriptem holes.ulp z Eagle do
+ * gcode pro vrtani.
+ *
+ * @author ppet36
+*/
+
+import java.io.*;
+import java.util.*;
+import java.math.BigDecimal;
+
+/** Prumer frezy na vrtani. */
+drillToolDiam = 0.8;
+
+/** Prumer frezy na rezani. */
+cutToolDiam = 1.5;
+
+/** Rychlost frezovani. */
+cutFeed = 400;
+
+/** Rychlost vrtani. */
+drillFeed = 100;
+
+/** Rychlost frezovani. */
+circualFeed = 150;
+
+/** Vychozi souradnice pro vreteno. */
+zHigh = 25;
+
+/** Bezpecna vyska. */
+zSafe = 5;
+
+/** Aktivni vyska; sem to dojede rychoposuvem. */
+zAct = 0.5;
+
+/** Hloubka na jeden zatah pri vrtani. */
+zIncDrill = 0.5;
+
+/** Hloubka vrtani. */
+depth = -2;
+
+/** Velikost tabu. */
+tabSize = 5.0;
+
+
+/**
+ * Double na retezec.
+ *
+ * @param d double.
+*/
+d2str (d) {
+  return new BigDecimal (d).setScale (5, BigDecimal.ROUND_HALF_UP).toPlainString();
+}
+
+/**
+ * Generuje diru.
+ *
+ * @param out vystup.
+ * @param x souradnice X.
+ * @param y souradnice Y.
+ * @param diam prumer.
+*/
+hole (out, x, y, diam) {
+  offY = (diam / 2.0) - (drillToolDiam / 2.0);
+  realY = y - offY;
+
+  out.println ("(dira " + diam + " na " + d2str (x) + " x " + d2str (y) + ")");
+
+  out.println ("G0 Z" + zSafe);
+  out.println ("G0 X" + d2str (x) + " Y" + d2str (realY));
+  out.println ("G0 Z" + zAct);
+
+  if (diam <= drillToolDiam) {
+    out.println ("G1 Z" + depth + " F" + drillFeed);
+  } else {
+    boolean first = true;
+    curDepth = zAct;
+    while (curDepth > depth) {
+      curDepth -= zIncDrill;
+      
+      if (curDepth < depth) {
+        curDepth = depth;
+      }
+
+      if (curDepth != 0) {
+        out.print ("G2 X" + d2str (x) + " Y" + d2str (realY) + " Z" + curDepth + " I0 J" + d2str (offY));
+
+        if (first) {
+          first = false;
+          out.println (" F" + circualFeed);
+        } else {
+          out.println();
+        }
+      }
+    }
+
+    out.println ("G2 X" + d2str (x) + " Y" + d2str (realY) + " I0 J" + d2str (offY));
+  }
+}
+
+point (x, y, d) {
+  this.x = x;
+  this.y = y;
+  this.d = d;
+  return this;
+}
+
+rect (x1, y1, x2, y2) {
+  this.x1 = x1;
+  this.y1 = y1;
+  this.x2 = x2;
+  this.y2 = y2;
+  return this;
+}
+
+sqr (x) {
+  return x * x;
+}
+
+s2double (x) {
+  return Double.parseDouble (x) / 1000.0;
+}
+
+
+generateDrillFile (outFile, points) {
+  out = new PrintWriter (new OutputStreamWriter (new FileOutputStream (outFile)));
+  try {
+    out.println ("G21");
+    out.println ("G17");
+    out.println ("G0 Z" + zHigh);
+    out.println ("M3 S12000");
+    out.println ("G4 P8");
+
+    for (p : points) {
+      System.out.println ("DRILL: d=" + d2str (p.d) + ", x=" + d2str (p.x) + ", y=" + d2str (p.y));
+      hole (out, p.x, p.y, p.d);
+    }
+
+    out.println ("G0 Z" + zHigh);
+    out.println ("M5");
+    out.println ("M30");
+    out.println();
+
+    System.out.println ("Generated drill file " + outFile + "...");
+  } finally {
+    out.close();
+  }
+}
+
+generateCutFile (outFile, rect) {
+  out = new PrintWriter (new OutputStreamWriter (new FileOutputStream (outFile)));
+  try {
+    out.println ("G21");
+    out.println ("G17");
+    out.println ("G0 Z" + zHigh);
+    out.println ("M3 S12000");
+    out.println ("G4 P8");
+    out.println ("G0 Z" + zSafe);
+
+    out.println ("G0 X" + d2str(rect.x1) + " Y" + d2str(rect.y1));
+    out.println ("G0 Z" + zAct);
+    out.println ("G1 X" + d2str(rect.x2) + " Z-1.0 F" + cutFeed);
+    out.println ("G1 Y" + d2str(rect.y2));
+    out.println ("G1 X" + d2str(rect.x1));
+    out.println ("G1 Y" + d2str(rect.y1));
+    out.println ("G1 X" + d2str(rect.x2));
+    out.println ("G1 Y" + d2str(rect.y2) + " Z-2.0");
+
+    halfX = (rect.x2 - rect.x1) / 2.0;
+    halfY = (rect.y2 - rect.y1) / 2.0;
+
+    out.println ("G1 X" + d2str(rect.x1 + halfX + tabSize));
+    out.println ("G1 X" + d2str(rect.x1 + halfX) + " Z-1.0");
+    out.println ("G1 X" + d2str(rect.x1 + halfX - tabSize) + " Z-2.0");
+    out.println ("G1 X" + d2str(rect.x1));
+
+    out.println ("G1 Y" + d2str(rect.y1 + halfY + tabSize));
+    out.println ("G1 Y" + d2str(rect.y1 + halfY) + " Z-1.0");
+    out.println ("G1 Y" + d2str(rect.y1 + halfY - tabSize) + " Z-2.0");
+    out.println ("G1 Y" + d2str(rect.y1));
+
+    out.println ("G1 X" + d2str(rect.x2 - halfX - tabSize));
+    out.println ("G1 X" + d2str(rect.x2 - halfX) + " Z-1.0");
+    out.println ("G1 X" + d2str(rect.x2 - halfX + tabSize) + " Z-2.0");
+    out.println ("G1 X" + d2str(rect.x2));    
+
+    out.println ("G1 Y" + d2str(rect.y2 - halfY - tabSize));
+    out.println ("G1 Y" + d2str(rect.y2 - halfY) + " Z-1.0");
+    out.println ("G1 Y" + d2str(rect.y2 - halfY + tabSize) + " Z-2.0");
+    out.println ("G1 Y" + d2str(rect.y2));
+
+    out.println ("G0 Z" + zHigh);
+    out.println ("M5");
+    out.println ("M30");
+    out.println();
+
+    System.out.println ("Generated cut file " + outFile + "...");
+  } finally {
+    out.close();
+  }
+}
+
+
+
+/** */
+if (bsh.args.length != 1) {
+  System.err.println ("Je nutne predat vstupni soubor *points!");
+  System.exit (1);
+}
+
+fileName = bsh.args[0];
+
+file = new File (fileName);
+if (!file.exists()) {
+  System.err.println ("Soubor " + file.getPath() + " neexistuje!");
+  System.exit (1);
+}
+
+dotIndex = fileName.lastIndexOf ('.');
+drillFile = fileName.substring (0, dotIndex) + "_drill.gcode";
+cutFile = fileName.substring (0, dotIndex) + "_cut.gcode";
+
+points = new ArrayList();
+
+minX = Double.MAX_VALUE;
+minY = Double.MAX_VALUE;
+maxX = Double.MIN_VALUE;
+maxY = Double.MIN_VALUE;
+
+in = new BufferedReader (new InputStreamReader (new FileInputStream (file)));
+try {
+  // vyparsujeme body a otocime zrcadlove podle X
+  String line;
+  while ((line = in.readLine()) != null) {
+    if (line.length() > 1) {
+      st = new StringTokenizer (line, ",");
+
+      d = s2double (st.nextToken());
+      if (d < 0.001) {
+        x1 = -1 * s2double (st.nextToken());
+        y1 = s2double (st.nextToken());
+        x2 = -1 * s2double (st.nextToken());
+        y2 = s2double (st.nextToken());
+
+        minX = Math.min (minX, x1);
+        minX = Math.min (minX, x2);
+        maxX = Math.max (maxX, x1);
+        maxY = Math.max (maxX, x2); 
+
+        minY = Math.min (minY, y1);
+        minY = Math.min (minY, y2);
+        maxY = Math.max (maxY, y1);
+        maxY = Math.max (maxY, y2); 
+      } else {
+        x = -1 * s2double (st.nextToken());
+        y = s2double (st.nextToken());
+
+        points.add (point (x, y, d));
+      }
+    }
+  }
+} finally {
+  in.close();
+}
+
+// setridime podle prumeru vzestupne
+Collections.sort (points, new Comparator() {
+  compare (a, b) {
+    if (a.d < b.d) {
+      return -1;
+    } else if (a.d > b.d) {
+      return 1;
+    } else{
+      return 0;
+    }
+  }
+});
+
+generateDrillFile (drillFile, points);
+generateCutFile (cutFile, rect(minX - cutToolDiam, minY - cutToolDiam, maxX + cutToolDiam, maxY + cutToolDiam));
+
