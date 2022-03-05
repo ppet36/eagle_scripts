@@ -5,3 +5,6 @@ holes.ulp - generates board.points with all holes in CSV format (diameter;X;Y) a
 
 points_to_gcode_absolute.[b]sh - script to convert points file to gcode for drilling and final cut of PCB. Needs Java and BeanShell (https://beanshell.github.io/).
 
+Video: https://youtu.be/hedyaXb-V9U
+
+
